@@ -4,16 +4,16 @@
 module Main where
 
 import           Control.Concurrent   (forkIO, forkOS)
-import           Control.Monad        (forever, unless, forM)
+import           Control.Monad        (forM, forever, unless)
 import           Control.Monad.Trans  (liftIO)
 import           Data.Aeson
-import Data.Scientific
 import           Data.Aeson.Types
 import qualified Data.ByteString.Lazy as LBS
+import           Data.Scientific
 import           Data.Text            (Text)
 import qualified Data.Text            as T
-import Data.Vector (toList)
 import qualified Data.Text.IO         as T
+import           Data.Vector          (toList)
 import           GHC.Generics
 import           Network.Socket       (withSocketsDo)
 import qualified Network.WebSockets   as WS
@@ -52,13 +52,6 @@ statusURI = "/client/ws/status"
     --     final -- true when the hypothesis is final, i.e., doesn't change any more
 
 
-data TranscriptStatus
-    = TransStatusSuccess
-    | TransStatusAborted
-    | TransStatusNoSpeech
-    | TransStatusNotAvailable
-    deriving (Show, Generic)
-
 data TranscriptResponse = TranscriptResponse
     { status  :: TranscriptStatus
     , message :: Maybe Text
@@ -70,60 +63,51 @@ data TranscriptResult = TranscriptResult
     , final      :: Bool
     } deriving (Show, Generic)
 
+data TranscriptStatus
+    = TransStatusSuccess
+    | TransStatusAborted
+    | TransStatusNoSpeech
+    | TransStatusNotAvailable
+    deriving (Show, Generic)
+
 type Confidence = Float
 type Transcript = Text
+
+instance FromJSON TranscriptResponse where
+    parseJSON = withObject "TranscriptResponse" $ \o -> do
+        status <- (o .: "status")
+        message <- (o .:? "message")
+        result <- (o .:? "result")
+        pure $ TranscriptResponse status message result
+
+
+instance FromJSON TranscriptStatus where
+    parseJSON = withScientific "status" $ \n ->
+        pure $ (statusCode2TranscriptStatus . truncate) n
+        where
+            statusCode2TranscriptStatus :: Int -> TranscriptStatus
+            statusCode2TranscriptStatus n
+                | n == 0     = TransStatusSuccess
+                | n == 1     = TransStatusNoSpeech
+                | n == 2     = TransStatusAborted
+                | n == 9     = TransStatusNotAvailable
+                | otherwise  = TransStatusAborted
 
 
 instance FromJSON TranscriptResult where
     parseJSON = withObject "result" $ \o -> do
         hypothesesArray <- o .: "hypotheses"
-        hypotheses  <- forM (hypothesesArray :: Array) hypo
-        final  <- o .: "final"
+        hypotheses <- forM hypothesesArray hypo
+        final <- o .: "final"
         pure $ TranscriptResult (toList hypotheses) final
         where
             hypo :: Value -> Parser (Transcript, Maybe Confidence)
-            hypo = withObject "hypo" $ \o  -> do
-                transcript   <- o .: "transcript"
-                confidence   <- o .:? "confidence"
+            hypo = withObject "hypo" $ \o -> do
+                transcript <- o .: "transcript"
+                confidence <- o .:? "confidence"
                 pure (transcript, confidence)
 
-instance FromJSON TranscriptStatus where
-    parseJSON = withScientific "status" $ \n -> pure $ (statusCode2TranscriptStatus . truncate) n
-
-
 somejson = "{\"status\": 0, \"segment\": 0, \"result\": {\"hypotheses\": [{\"transcript\": \"AS TO QUARTERS THE APOSTLE OF THE MIDDLE CLASSES AND WE'RE GLAD TO WELCOME HIS GOSPEL.\"}], \"final\": false}, \"id\": \"10766ae3-00a0-4431-ab48-f8dd1c533e45\"}"
-
-instance FromJSON TranscriptResponse where
-    -- parseJSON = withObject "TranscriptResponse" $ \v -> TranscriptResponse
-    parseJSON = withObject "TranscriptResponse" $ \o -> do
-        status  <- (o .: "status")
-        message  <- (o .:? "message")
-        result  <- (o .:? "result")
-    --     result <- (o .: "result")
-    --     hypotheses <- (result .: "hypotheses")
-        pure $ TranscriptResponse status message result
-
-
-    --     let stat = () .: "status"
-        -- <$> statusCode2TranscriptStatus <$> (v .: "status")
-        -- -- <*> hypoParser .: "result"
-        -- <*> pure "this"
-        -- <*> pure False
--- (.:) :: FromJSON a => Object -> Text -> Parser a 
--- withObject :: String -> (Object -> Parser a) -> Value -> Parser a 
-
-hypoParser :: Value -> Parser Text
--- hypoParser = withObject "result" $ \v -> v .: "hypotheses"
-hypoParser (Object o) = o .: "hypotheses"
-
-statusCode2TranscriptStatus :: Int -> TranscriptStatus
-statusCode2TranscriptStatus n
-    | n == 0     = TransStatusSuccess
-    | n == 1     = TransStatusNoSpeech
-    | n == 2     = TransStatusAborted
-    | n == 9     = TransStatusNotAvailable
-    | otherwise  = TransStatusAborted
--- instance FromJSON TranscriptResponse
 
 app :: WS.ClientApp ()
 app conn = do
@@ -154,7 +138,7 @@ main = do
  let eDec = ((eitherDecode somejson) :: Either String TranscriptResponse)
  case eDec of
     Right response -> print response
-    Left err -> error err
+    Left err       -> error err
 
 -- main = withSocketsDo $ WS.runClient "echo.websocket.org" 80 "/" app
 
