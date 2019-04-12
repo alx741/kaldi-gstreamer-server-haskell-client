@@ -4,13 +4,15 @@
 module Main where
 
 import           Control.Concurrent   (forkIO, forkOS)
-import           Control.Monad        (forever, unless)
+import           Control.Monad        (forever, unless, forM)
 import           Control.Monad.Trans  (liftIO)
 import           Data.Aeson
+import Data.Scientific
 import           Data.Aeson.Types
 import qualified Data.ByteString.Lazy as LBS
 import           Data.Text            (Text)
 import qualified Data.Text            as T
+import Data.Vector (toList)
 import qualified Data.Text.IO         as T
 import           GHC.Generics
 import           Network.Socket       (withSocketsDo)
@@ -32,6 +34,23 @@ statusURI = "/client/ws/status"
 -- serviceURL :: Text
 -- serviceURL = host <> ":" <> port <> "/" <> speechURI
 
+-- 0d05ef0\"}"
+-- "{\"status\": 0, \"segment\": 0, \"result\": {\"hypotheses\": [{\"transcript\": \"AS TO.\"}], \"final\": false}, \"id\": \"51695045-32a7-437f-a108-e71700d05ef0\"}"
+-- "{\"status\": 0, \"segment\": 0, \"result\": {\"hypotheses\": [{\"transcript\": \"AS TO QUARTERS.\"}], \"final\": false}, \"id\": \"51695045-32a7-437f-a108-e71700d05ef0\"}"
+-- "{\"status\": 0, \"segment\": 0, \"result\": {\"hypotheses\": [{\"transcript\": \"AS TO QUARTERS THE.\"}], \"final\": false}, \"id\": \"51695045-32a7-437f-a108-e71700d05ef0\"}"
+-- "{\"status\": 0, \"segment\": 0, \"result\": {\"hypotheses\": [{\"transcript\": \"AS TO QUARTERS THE APOSTLE.\"}], \"final\": false}, \"id\": \"51695045-32a7-437f-a108-e71700d05ef0\"}"
+-- "{\"status\": 0, \"segment\": 0, \"result\": {\"hypotheses\": [{\"transcript\": \"AS TO QUARTERS THE APOSTLE OF.\"}], \"final\": false}, \"id\": \"51695045-32a7-437f-a108-e71700d05ef0\"}"
+
+
+
+    -- status -- response status (integer), see codes below
+    -- message -- (optional) status message
+    -- result -- (optional) recognition result, containing the following fields:
+    --     hypotheses - recognized words, a list with each item containing the following:
+    --         transcript -- recognized words
+    --         confidence -- (optional) confidence of the hypothesis (float, 0..1)
+    --     final -- true when the hypothesis is final, i.e., doesn't change any more
+
 
 data TranscriptStatus
     = TransStatusSuccess
@@ -41,26 +60,48 @@ data TranscriptStatus
     deriving (Show, Generic)
 
 data TranscriptResponse = TranscriptResponse
-    { status     :: TranscriptStatus
-    , hypotheses :: [Transcript]
-    , isFinal    :: Bool
+    { status  :: TranscriptStatus
+    , message :: Maybe Text
+    , result  :: Maybe TranscriptResult
     } deriving (Show, Generic)
 
-data Transcript = Transcript Text deriving (Show)
+data TranscriptResult = TranscriptResult
+    { hypotheses :: [(Transcript, Maybe Confidence)]
+    , final      :: Bool
+    } deriving (Show, Generic)
 
-instance FromJSON Transcript where
-    parseJSON = withObject "transcript" $ \o -> Transcript <$> o .: "transcript"
+type Confidence = Float
+type Transcript = Text
+
+
+instance FromJSON TranscriptResult where
+    parseJSON = withObject "result" $ \o -> do
+        hypothesesArray <- o .: "hypotheses"
+        hypotheses  <- forM (hypothesesArray :: Array) hypo
+        final  <- o .: "final"
+        pure $ TranscriptResult (toList hypotheses) final
+        where
+            hypo :: Value -> Parser (Transcript, Maybe Confidence)
+            hypo = withObject "hypo" $ \o  -> do
+                transcript   <- o .: "transcript"
+                confidence   <- o .:? "confidence"
+                pure (transcript, confidence)
+
+instance FromJSON TranscriptStatus where
+    parseJSON = withScientific "status" $ \n -> pure $ (statusCode2TranscriptStatus . truncate) n
+
 
 somejson = "{\"status\": 0, \"segment\": 0, \"result\": {\"hypotheses\": [{\"transcript\": \"AS TO QUARTERS THE APOSTLE OF THE MIDDLE CLASSES AND WE'RE GLAD TO WELCOME HIS GOSPEL.\"}], \"final\": false}, \"id\": \"10766ae3-00a0-4431-ab48-f8dd1c533e45\"}"
 
 instance FromJSON TranscriptResponse where
     -- parseJSON = withObject "TranscriptResponse" $ \v -> TranscriptResponse
     parseJSON = withObject "TranscriptResponse" $ \o -> do
-        status  <- statusCode2TranscriptStatus <$> (o .: "status")
-        -- hypothesesO <- o .: "hypotheses"
-        result <- (o .: "result")
-        hypotheses <- (result .: "hypotheses")
-        pure $ TranscriptResponse status hypotheses False
+        status  <- (o .: "status")
+        message  <- (o .:? "message")
+        result  <- (o .:? "result")
+    --     result <- (o .: "result")
+    --     hypotheses <- (result .: "hypotheses")
+        pure $ TranscriptResponse status message result
 
 
     --     let stat = () .: "status"
@@ -114,6 +155,7 @@ main = do
  case eDec of
     Right response -> print response
     Left err -> error err
+
 -- main = withSocketsDo $ WS.runClient "echo.websocket.org" 80 "/" app
 
 -- main = withSocketsDo $ WS.runClient "localhost" 8080 "/client/ws/speech?content-type=audio/x-raw,+layout=(String)interleaved,+rate=(Int)16000,+format=(String)S16LE,+channels=(Int)1" app

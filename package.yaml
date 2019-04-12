@@ -27,6 +27,8 @@ dependencies:
 - bytestring
 - network
 - aeson
+- scientific
+- vector
 
 library:
   source-dirs: src
