@@ -1,4 +1,3 @@
-{-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Main where
@@ -14,10 +13,11 @@ import           Data.Text            (Text)
 import qualified Data.Text            as T
 import qualified Data.Text.IO         as T
 import           Data.Vector          (toList)
-import           GHC.Generics
 import           Network.Socket       (withSocketsDo)
 import qualified Network.WebSockets   as WS
 import           System.IO            (hFlush, stdout)
+
+import Types
 
 host :: Text
 host = "localhost"
@@ -34,78 +34,6 @@ statusURI = "/client/ws/status"
 -- serviceURL :: Text
 -- serviceURL = host <> ":" <> port <> "/" <> speechURI
 
--- 0d05ef0\"}"
--- "{\"status\": 0, \"segment\": 0, \"result\": {\"hypotheses\": [{\"transcript\": \"AS TO.\"}], \"final\": false}, \"id\": \"51695045-32a7-437f-a108-e71700d05ef0\"}"
--- "{\"status\": 0, \"segment\": 0, \"result\": {\"hypotheses\": [{\"transcript\": \"AS TO QUARTERS.\"}], \"final\": false}, \"id\": \"51695045-32a7-437f-a108-e71700d05ef0\"}"
--- "{\"status\": 0, \"segment\": 0, \"result\": {\"hypotheses\": [{\"transcript\": \"AS TO QUARTERS THE.\"}], \"final\": false}, \"id\": \"51695045-32a7-437f-a108-e71700d05ef0\"}"
--- "{\"status\": 0, \"segment\": 0, \"result\": {\"hypotheses\": [{\"transcript\": \"AS TO QUARTERS THE APOSTLE.\"}], \"final\": false}, \"id\": \"51695045-32a7-437f-a108-e71700d05ef0\"}"
--- "{\"status\": 0, \"segment\": 0, \"result\": {\"hypotheses\": [{\"transcript\": \"AS TO QUARTERS THE APOSTLE OF.\"}], \"final\": false}, \"id\": \"51695045-32a7-437f-a108-e71700d05ef0\"}"
-
-
-
-    -- status -- response status (integer), see codes below
-    -- message -- (optional) status message
-    -- result -- (optional) recognition result, containing the following fields:
-    --     hypotheses - recognized words, a list with each item containing the following:
-    --         transcript -- recognized words
-    --         confidence -- (optional) confidence of the hypothesis (float, 0..1)
-    --     final -- true when the hypothesis is final, i.e., doesn't change any more
-
-
-data TranscriptResponse = TranscriptResponse
-    { status  :: TranscriptStatus
-    , message :: Maybe Text
-    , result  :: Maybe TranscriptResult
-    } deriving (Show, Generic)
-
-data TranscriptResult = TranscriptResult
-    { hypotheses :: [(Transcript, Maybe Confidence)]
-    , final      :: Bool
-    } deriving (Show, Generic)
-
-data TranscriptStatus
-    = TransStatusSuccess
-    | TransStatusAborted
-    | TransStatusNoSpeech
-    | TransStatusNotAvailable
-    deriving (Show, Generic)
-
-type Confidence = Float
-type Transcript = Text
-
-instance FromJSON TranscriptResponse where
-    parseJSON = withObject "TranscriptResponse" $ \o -> do
-        status <- (o .: "status")
-        message <- (o .:? "message")
-        result <- (o .:? "result")
-        pure $ TranscriptResponse status message result
-
-
-instance FromJSON TranscriptStatus where
-    parseJSON = withScientific "status" $ \n ->
-        pure $ (statusCode2TranscriptStatus . truncate) n
-        where
-            statusCode2TranscriptStatus :: Int -> TranscriptStatus
-            statusCode2TranscriptStatus n
-                | n == 0     = TransStatusSuccess
-                | n == 1     = TransStatusNoSpeech
-                | n == 2     = TransStatusAborted
-                | n == 9     = TransStatusNotAvailable
-                | otherwise  = TransStatusAborted
-
-
-instance FromJSON TranscriptResult where
-    parseJSON = withObject "result" $ \o -> do
-        hypothesesArray <- o .: "hypotheses"
-        hypotheses <- forM hypothesesArray hypo
-        final <- o .: "final"
-        pure $ TranscriptResult (toList hypotheses) final
-        where
-            hypo :: Value -> Parser (Transcript, Maybe Confidence)
-            hypo = withObject "hypo" $ \o -> do
-                transcript <- o .: "transcript"
-                confidence <- o .:? "confidence"
-                pure (transcript, confidence)
 
 somejson = "{\"status\": 0, \"segment\": 0, \"result\": {\"hypotheses\": [{\"transcript\": \"AS TO QUARTERS THE APOSTLE OF THE MIDDLE CLASSES AND WE'RE GLAD TO WELCOME HIS GOSPEL.\"}], \"final\": false}, \"id\": \"10766ae3-00a0-4431-ab48-f8dd1c533e45\"}"
 

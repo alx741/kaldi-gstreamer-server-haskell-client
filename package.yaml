@@ -32,6 +32,10 @@ dependencies:
 
 library:
   source-dirs: src
+  ghc-options:
+  - -Wall
+  - -fwarn-tabs
+  - -O0
 
 executables:
   client:
