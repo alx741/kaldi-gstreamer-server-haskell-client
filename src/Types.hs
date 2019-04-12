@@ -3,12 +3,11 @@
 
 module Types where
 
-import           Data.Aeson
-import           Data.Aeson.Types
-import           Data.Vector          (toList)
-import           Control.Monad        (forM)
-import           Data.Text            (Text)
-import           GHC.Generics
+import Control.Monad    (forM)
+import Data.Aeson
+import Data.Aeson.Types
+import Data.Text        (Text)
+import GHC.Generics
 
 data TranscriptResponse = TranscriptResponse
     { status  :: TranscriptStatus
@@ -32,11 +31,10 @@ type Confidence = Float
 type Transcript = Text
 
 instance FromJSON TranscriptResponse where
-    parseJSON = withObject "TranscriptResponse" $ \o -> do
-        status <- (o .: "status")
-        message <- (o .:? "message")
-        result <- (o .:? "result")
-        pure $ TranscriptResponse status message result
+    parseJSON = withObject "TranscriptResponse" $ \o -> TranscriptResponse
+        <$> o .: "status"
+        <*> o .:? "message"
+        <*> o .:? "result"
 
 
 instance FromJSON TranscriptStatus where
@@ -55,9 +53,9 @@ instance FromJSON TranscriptStatus where
 instance FromJSON TranscriptResult where
     parseJSON = withObject "result" $ \o -> do
         hypothesesArray <- o .: "hypotheses"
-        hypotheses <- forM hypothesesArray hypo
-        final <- o .: "final"
-        pure $ TranscriptResult (toList hypotheses) final
+        TranscriptResult
+            <$> forM hypothesesArray hypo
+            <*> o .: "final"
         where
             hypo :: Value -> Parser (Transcript, Maybe Confidence)
             hypo = withObject "hypo" $ \o -> do
