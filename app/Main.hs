@@ -10,14 +10,15 @@ import           Data.Text            (Text)
 import qualified Data.Text.IO         as T
 import           Network.Socket       (withSocketsDo)
 import qualified Network.WebSockets   as WS
+import           System.IO            (stdin)
 
 import Types
 
-host :: Text
-host = "localhost"
+defaultHost :: String
+defaultHost = "localhost"
 
-port :: Text
-port = "8080"
+defaultPort :: Int
+defaultPort = 8080
 
 speechURI :: Text
 speechURI = "/client/ws/speech"
@@ -26,8 +27,7 @@ statusURI :: Text
 statusURI = "/client/ws/status"
 
 -- serviceURL :: Text
--- serviceURL = host <> ":" <> port <> "/" <> speechURI
-
+-- serviceURL = defaultHost <> ":" <> defaultPort <> "/" <> speechURI
 
 app :: WS.ClientApp ()
 app conn = do
@@ -35,8 +35,18 @@ app conn = do
 
     -- Read raw binary from file
     _ <- forkIO $ do
-        raw <- liftIO $ LBS.readFile "test.wav"
+
+        -- raw <- liftIO $ LBS.readFile "some.wav"
+        -- WS.sendBinaryData conn raw
+
+-- arecord -f S16_LE -r 16000 | stack exec client
+
+        -- raw <- liftIO $ LBS.getContents
+        -- WS.sendBinaryData conn raw
+
+        raw <- liftIO $ LBS.hGet stdin 204800
         WS.sendBinaryData conn raw
+
         WS.sendTextData conn ("EOS" :: Text)
 
     -- Recive answers
@@ -57,7 +67,7 @@ main :: IO ()
 
 -- main = withSocketsDo $ WS.runClient "echo.websocket.org" 80 "/" app
 
-main = withSocketsDo $ WS.runClient "localhost" 8080 "/client/ws/speech?content-type=audio/x-raw,+layout=(String)interleaved,+rate=(Int)16000,+format=(String)S16LE,+channels=(Int)1" app
+main = withSocketsDo $ WS.runClient defaultHost defaultPort "/client/ws/speech?content-type=audio/x-raw,+layout=(String)interleaved,+rate=(Int)16000,+format=(String)S16LE,+channels=(Int)1" app
 
 -- main = withSocketsDo $ WS.runClient "localhost" 8080 statusURI app
 

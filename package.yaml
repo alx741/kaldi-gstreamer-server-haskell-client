@@ -29,6 +29,7 @@ dependencies:
 - aeson
 - scientific
 - vector
+- conduit
 
 library:
   source-dirs: src
