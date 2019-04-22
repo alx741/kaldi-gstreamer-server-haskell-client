@@ -30,6 +30,7 @@ dependencies:
 - scientific
 - vector
 - conduit
+- cmdargs
 
 library:
   source-dirs: src
