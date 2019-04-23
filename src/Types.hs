@@ -9,6 +9,12 @@ import Data.Aeson.Types
 import Data.Text        (Text)
 import GHC.Generics
 
+data KaldigsclientArgs = KaldigsclientArgs
+    { host :: String
+    , port :: Int
+    , file :: FilePath
+    } deriving (Show)
+
 data TranscriptResponse = TranscriptResponse
     { status  :: TranscriptStatus
     , message :: Maybe Text
