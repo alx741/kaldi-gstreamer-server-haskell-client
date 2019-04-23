@@ -30,7 +30,7 @@ dependencies:
 - scientific
 - vector
 - conduit
-- cmdargs
+- optparse-applicative
 
 library:
   source-dirs: src

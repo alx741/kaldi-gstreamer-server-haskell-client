@@ -2,16 +2,19 @@
 
 module Main where
 
-import           Control.Concurrent     (forkIO)
-import           Control.Monad.Trans    (liftIO)
+import           Control.Concurrent   (forkIO)
+import           Control.Monad
+import           Control.Monad.Trans  (liftIO)
 import           Data.Aeson
-import qualified Data.ByteString.Lazy   as LBS
-import           Data.Text              (Text, pack)
-import qualified Data.Text.IO           as T
-import           Network.Socket         (withSocketsDo)
-import qualified Network.WebSockets     as WS
-import           System.Console.CmdArgs
-import           System.IO              (stdin)
+import qualified Data.ByteString.Lazy as LBS
+import           Data.Semigroup       ((<>))
+import           Data.Text            (Text, pack)
+import qualified Data.Text.IO         as T
+import           Network.Socket       (withSocketsDo)
+import qualified Network.WebSockets   as WS
+import           Options.Applicative
+import           System.Exit          (exitFailure)
+import           System.IO            (stdin)
 
 import Client
 import Types
@@ -52,7 +55,21 @@ app fp conn = do
 
 
 main :: IO ()
-main = print =<< cmdArgs clientArgs
+main = do
+    args <- execParser opts
+    print args
+    where
+        opts = info (kaldigsclientArgsParser <**> helper)
+            (  fullDesc
+            <> header "Kaldi Gstreamer client v0.1.0.0 (C) Daniel Campoverde 2019"
+            <> progDesc "Kaldi Gstreamer client (kaldigsclient) lets you query a \
+                        \kaldi-gstreamer-server instance \
+                        \(https://github.com/alumae/kaldi-gstreamer-server)"
+            )
+
+    -- args <- cmdArgs clientArgs
+    -- when (file clientArgs == "") $ putStrLn "Empty file argument" >> exitFailure
+    -- pure ()
 
 -- main = withSocketsDo $ WS.runClient "echo.websocket.org" 80 "/" app
 
@@ -63,18 +80,36 @@ main = print =<< cmdArgs clientArgs
 -- Python client cmd
 -- python2 kaldigstserver/client.py -u ws://localhost:8080/client/ws/speech -r 32000 /tmp/1272-128104-0000.wav
 
-data Kaldigsclient = Kaldigsclient
+data KaldigsclientArgs = KaldigsclientArgs
     { host :: String
     , port :: Int
     , file :: FilePath
-    } deriving (Show, Data, Typeable)
+    } deriving (Show)
 
--- clientArgs :: Kaldigsclient
-clientArgs = Kaldigsclient
-    { host = defaultHost &= help "Kaldi gstreamer server host"
-    , port = defaultPort &= help "Kaldi gstreamer server port"
-    , file = def &= help "audio file"
-    } &= summary "kaldigsclient v0.1.0.0 (C) Daniel Campoverde [alx741] 2019"
+kaldigsclientArgsParser :: Parser KaldigsclientArgs
+kaldigsclientArgsParser = KaldigsclientArgs
+        <$> strOption
+            ( long "host"
+            <> short 'h'
+            <> metavar "HOST"
+            <> help "Kaldi gstreamer server host"
+            <> showDefault
+            <> value defaultHost
+            )
+        <*> option auto
+            ( long "port"
+            <> short 'p'
+            <> metavar "PORT"
+            <> help "Kaldi gstreamer server port"
+            <> showDefault
+            <> value defaultPort
+            )
+        <*> strOption
+            ( long "file"
+            <> short 'f'
+            <> metavar "FILE"
+            <> help "Audio file"
+            )
     where
         defaultHost = "localhost"
         defaultPort = 8080
